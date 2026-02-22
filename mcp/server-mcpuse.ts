@@ -88,7 +88,7 @@ startWorkCleanup(workspace, bumpVersion);
 const server = new MCPServer({
   name: "stigmergy",
   version: "3.0.0",
-  description: "Stigmergy - MCP Apps Hackathon: Multi-agent coordination (ChatGPT + Claude) inside one chat. When user adds Stigmergy, call stigmergy-dashboard first to show the agents sidebar. NO MOCK DATA: use real Gmail/Calendar via check_email, read_gmail, add_calendar_event. Meeting Kit: ChatGPT builds the kit; Claude joins via MCP to research News/Thesis/Competitors. Email: gmail_create_draft (review first) or gmail_send_reply (send directly). When returning Google sign-in links, paste the full URL in your response.",
+  description: "Stigmergy - MCP Apps Hackathon: Multi-agent coordination (ChatGPT + Claude + Cursor) inside one chat. When user adds Stigmergy, call stigmergy-dashboard first to show the agents sidebar. Backend endpoint flow: ChatGPT ideates → call set_target with backend_task → Cursor polls and codes. Meeting Kit: ChatGPT builds kit; Claude researches. Email: gmail_create_draft or gmail_send_reply. When returning Google sign-in links, paste the full URL.",
 });
 
 // Register all MCP tools
@@ -184,6 +184,13 @@ body{font-family:system-ui,sans-serif;background:#0d1117;color:#c9d1d9;padding:1
 </head>
 <body>
 <div style="background:linear-gradient(90deg,#7c3aed,#a855f7);color:white;padding:5px 10px;font-size:10px;font-weight:600;text-align:center">MCP Apps Hackathon Feb 21 • YC SF • Manufact</div>
+<div style="margin:8px 0;padding:8px;background:#161b22;border:1px solid #30363d;border-radius:6px;font-size:10px">
+  <div style="color:#8b949e;margin-bottom:4px">Backend Endpoint: ChatGPT ideates → Cursor codes</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button onclick="typeof copyBackendChatGPTPrompt==='function'&&copyBackendChatGPTPrompt()" style="padding:4px 10px;background:#7c3aed;color:white;border:none;border-radius:4px;font-size:10px;cursor:pointer">Copy ChatGPT Prompt</button>
+    <button onclick="typeof copyBackendCursorPrompt==='function'&&copyBackendCursorPrompt()" style="padding:4px 10px;background:#22c55e;color:white;border:none;border-radius:4px;font-size:10px;cursor:pointer">Copy Cursor Prompt</button>
+  </div>
+</div>
 <div class="sidebar-title" style="display:flex;align-items:center;justify-content:space-between">
   <span>Active Agents</span>
   <button class="mk-btn mk-btn-icon" onclick="window.openai&&window.openai.requestDisplayMode&&window.openai.requestDisplayMode('fullscreen')" title="Fullscreen" style="padding:2px 6px;font-size:12px">⛶</button>
@@ -192,12 +199,56 @@ body{font-family:system-ui,sans-serif;background:#0d1117;color:#c9d1d9;padding:1
 <script>
 (function(){
   const BAKED_API = '${DASHBOARD_URL}';
+  const MCP_BASE = '${MCP_BASE_URL}';
   const origin = window.location.origin;
   const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
   const inChatGPT = !!(window.openai && window.openai.callTool);
   const API = isLocalhost && !inChatGPT ? BAKED_API : (isLocalhost ? null : origin);
   const callTool = inChatGPT ? window.openai.callTool.bind(window.openai) : null;
+  const followUp = (window.openai&&window.openai.sendFollowUpMessage) ? function(m){window.openai.sendFollowUpMessage({prompt:m})} : function(){};
+  const MCP_URL = MCP_BASE + '/mcp';
   function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+  window.copyBackendChatGPTPrompt = function(){
+    var p = [
+      'When the user asks you to ideate a backend endpoint, do this:',
+      '1. Design the endpoint (method, path, request/response, validation).',
+      '2. Call set_target with the spec so Cursor can implement it:',
+      '   set_target({',
+      '     target: "POST /api/users (or whatever endpoint)",',
+      '     backend_task: "Implement POST /api/users: validate email, hash password, create user in DB, return 201. Use the framework in the project."',
+      '   })',
+      '3. Tell the user: "I\'ve queued the task. Copy the Cursor prompt from the Stigmergy dashboard and paste it in Cursor — Cursor will implement it."',
+      '',
+      'When the user asks "what did Cursor build?" or "what did Cursor implement?" or "show me what was completed":',
+      '  Call read_intents({}) or get_graph_widget({}). read_intents returns recent activity like "[completed] Cursor Agent: Implemented POST /api/users". Summarize what Cursor (or any agent) built.',
+    ].join('\n');
+    try{navigator.clipboard.writeText(p)}catch(e){}
+    followUp('ChatGPT prompt copied. Paste this in ChatGPT so it knows to ideate and call set_target. Then copy the Cursor prompt for Cursor.');
+  };
+  window.copyBackendCursorPrompt = function(){
+    var p = [
+      'Add Stigmergy MCP to Cursor (same URL as ChatGPT). ChatGPT has queued a backend task — you will implement it.',
+      '',
+      'PREREQUISITE: Add Stigmergy MCP: ' + MCP_URL,
+      '',
+      'STEP 1 — Join as backend (you\'re the coder):',
+      '  join_workspace({ "name": "Cursor Agent", "client": "cursor", "role": "backend", "autonomous": true })',
+      '',
+      'STEP 2 — Poll for the task ChatGPT created:',
+      '  poll_work({ "role": "backend" })',
+      '  You\'ll get the backend_task spec (e.g. "Implement POST /api/users...").',
+      '',
+      'STEP 3 — Implement it:',
+      '  Write the code in the project. Create the endpoint, add validation, etc.',
+      '',
+      'STEP 4 — Mark done:',
+      '  complete_work({ "work_id": "<id from poll_work>", "result": "Implemented POST /api/users" })',
+      '',
+      'We share context: ChatGPT ideated, you code. Same workspace.',
+    ].join('\n');
+    try{navigator.clipboard.writeText(p)}catch(e){}
+    followUp('Cursor prompt copied. Paste in Cursor — Cursor will join, poll for the backend task, and implement it.');
+  };
   function parseToolResult(r){
     if(!r)return null;
     let raw = r?.content?.[0]?.text ?? r?.result?.content?.[0]?.text ?? (typeof r==='string'?r:null);
@@ -2360,8 +2411,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
     if (m.company && (s.status === 'ready' || s.status === 'preparing' || sections.length > 0)) {
       html += '<div class="mk-claude-bar">';
       html += '<span class="mk-claude-label">🤝 Claude + ChatGPT Collaborating</span>';
-      html += '<span class="mk-claude-hint">ChatGPT builds the kit here. Claude joins via MCP to research News, Thesis &amp; Competitors. Copy prompt → add Stigmergy to Claude → both agents work together.</span>';
+      html += '<span class="mk-claude-hint">ChatGPT builds the kit. Claude researches. Cursor joins via MCP — all share the same workspace. Copy prompt → add Stigmergy MCP to each.</span>';
       html += '<button class="mk-btn mk-claude-copy-btn" onclick="copyClaudePrompt()">Copy Claude Prompt</button>';
+      html += '<button class="mk-btn mk-claude-copy-btn" onclick="copyCursorPrompt()" style="border-color:#22c55e;color:#22c55e">Copy Cursor Prompt</button>';
       html += '</div>';
     }
 
@@ -2633,6 +2685,36 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
     ].join('\\n');
     try { navigator.clipboard.writeText(prompt); } catch(e) {}
     followUp('Claude prompt copied. Open Claude → Settings → Integrations → Add MCP Server → paste: ' + MCP_URL);
+  };
+
+  window.copyCursorPrompt = function() {
+    var company = (state && state.meeting && state.meeting.company) ? state.meeting.company : 'this company';
+    var prompt = [
+      'Add Stigmergy MCP to Cursor (same URL as ChatGPT uses). We share the same workspace — ChatGPT is building a meeting kit for ' + company + ', Claude is researching. Join and collaborate.',
+      '',
+      'PREREQUISITE: Add Stigmergy MCP server to Cursor:',
+      '  URL: ' + MCP_URL,
+      '  (Cursor → Settings → MCP → Add server)',
+      '',
+      'You are Cursor Agent, collaborating with ChatGPT and Claude on the SAME meeting kit. We share context via Stigmergy.',
+      '',
+      'STEP 1 — Join the shared workspace:',
+      '  call join_workspace({ "name": "Cursor Agent", "client": "cursor", "role": "frontend", "autonomous": true })',
+      '',
+      'STEP 2 — Set the same target (so we\'re all working on the same thing):',
+      '  call set_target({ "target": "Meeting Kit: ' + company + '" })',
+      '',
+      'STEP 3 — Poll for work:',
+      '  call poll_work({ "role": "frontend" })',
+      '  If no frontend work, try: call poll_work({ "role": "any" })',
+      '  Complete tasks with update_meeting_section and complete_work.',
+      '',
+      'STEP 4 — Show we share context:',
+      '  call get_meeting_kit({}) to see the live kit ChatGPT and Claude are building.',
+      '  You can add or update sections with update_meeting_section({ section_id, content, bullets, agent_name: "Cursor Agent" }).',
+    ].join('\n');
+    try { navigator.clipboard.writeText(prompt); } catch(e) {}
+    followUp('Cursor prompt copied. Add Stigmergy MCP to Cursor, paste this prompt, and Cursor will join the same workspace as ChatGPT.');
   };
 
   async function refresh() {

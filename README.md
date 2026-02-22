@@ -1,177 +1,125 @@
-# SYNAPSE
+# Stigmergy
 
-## Shared Cognition for AI Agents
+**ChatGPT + Claude collaborating in one chat. Real Gmail. Real Calendar. Investor meeting prep — end to end.**
 
-> What if every AI tool you use shared the same brain?
+MCP Apps Hackathon • Feb 21st 2026 @ Y Combinator, SF • Manufact • mcp-use
 
-**MCP Apps Hackathon @ Y Combinator, Feb 21 2025**
+---
+
+## What We Built (At a Glance)
+
+**Stigmergy** is an MCP server that lets ChatGPT and Claude work together on the same task. You chat in ChatGPT, and widgets appear. You interact with them. Both AI models share state via MCP — no handoffs, no copy-paste.
+
+** demo:** Investor meeting prep. Check email → pick a contact → prepare a meeting kit → book it on your calendar → draft a reply. All from chat. Claude can join and research News, Thesis, and Competitors in parallel while ChatGPT builds the kit.
+
+---
+
+## Demo: Full User Journey
+
+### 1. Chat prompt → Widget appears
+
+```
+"Add Stigmergy to this chat"
+```
+
+```
+"Check my email and show my inbox"
+```
+
+→ **Command Center** loads your real Gmail inbox (OAuth). You see emails with Archive, Star, Prep Meeting buttons.
+
+### 2. Interact with the widget
+
+- Click **Prep Meeting** on an email → Meeting Kit opens
+- Edit date, invitees, goal → Click **Save fields**
+- Click **Check Availability** → See your calendar
+- Click **Create Calendar Event** → Add meeting to Google Calendar
+- Click **Generate Kit** → Agents research News, Thesis, Competitors
+- Click **Create Gmail Draft** → Reply draft in Gmail
+
+### 3. ChatGPT + Claude collaborating
+
+- Click **Copy Claude Prompt** in the Meeting Kit
+- Add Stigmergy to Claude Desktop (same MCP URL)
+- Paste the prompt in Claude → Claude calls `join_workspace`, `poll_work`, `update_meeting_section`
+- **Both agents** write into the same Meeting Kit. Claude researches. ChatGPT orchestrates.
+
+---
+
+## Why It Matters
+
+| Problem | Stigmergy |
+|--------|-----------|
+| Claude doesn't know what ChatGPT did | Shared workspace via MCP — both read/write the same Meeting Kit |
+| "Check my email" → AI says "I can't" | Real Gmail OAuth. Real inbox. Real calendar. |
+| Widgets are static | Buttons call tools: Check Email, Load Calendar, Prep Meeting, Add to Calendar |
 
 ---
 
 ## Quick Start
 
 ```bash
-# Install
 npm install
-
-# Start the server
 npm run mcp
-
-# Open the dashboard (in browser)
-open http://localhost:3201/
-
-# Test the ChatGPT widget (Inspector)
-open http://localhost:3200/inspector
-# Then invoke the "synapse-dashboard" tool to see agents, locks, and activity
-
-# Run the Relentless Handoff demo (in another terminal)
-./demo/relentless-handoff.sh
 ```
 
-### ChatGPT / MCP Inspector Widget
+**Add to ChatGPT:** Use the Stigmergy MCP connector (deployed at `https://shiny-credit-ak9lb.run.mcp-use.com/mcp` or deploy your own with `mcp-use deploy`).
 
-The **synapse-dashboard** widget surfaces Synapse state (target, agents, locks, recent activity) in ChatGPT and the MCP Inspector. When connected to Synapse, ask the AI to "show Synapse status" or invoke the `synapse-dashboard` tool.
+**Add to Claude Desktop:** Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
-### Connect to Synapse
-
-```bash
-# Connect this environment (Cursor/Claude/Terminal) to Synapse hub
-npx synapse connect
-# or
-npm run connect
-```
-
-### Deploy to MCP Cloud
-
-```bash
-mcp-use login
-mcp-use deploy
-```
-
-Set `SYNAPSE_DASHBOARD_URL` to your deployed API URL so the widget fetches from the correct origin (e.g. `https://your-app.manufact.dev`).
-
-### Environment variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `GOOGLE_CLIENT_ID` | For Gmail OAuth | Google OAuth 2.0 client ID |
-| `GOOGLE_CLIENT_SECRET` | For Gmail OAuth | Google OAuth 2.0 client secret |
-| `GOOGLE_REDIRECT_URI` | For Gmail OAuth | OAuth callback URL (e.g. `http://localhost:3200/auth/google/callback`) |
-| `SERPER_API_KEY` | Optional | Enables live web search in Meeting Kit (News / Thesis / Competitors). Get one at [serper.dev](https://serper.dev). Without it, sections fall back to static placeholder bullets. |
-| `SYNAPSE_DASHBOARD_URL` | For hosted deploys | Base URL of your deployed MCP server |
-
-## The Problem
-
-Today, AI tools are isolated:
-- Claude doesn't know what Cursor just did
-- ChatGPT can't see your test results
-- Every agent operates blind
-
-## The Solution
-
-**Synapse** provides a shared cognition layer:
-
-1. **Shared World State** - A structured belief graph all agents read/write
-2. **Convergence Engine** - Goals auto-evaluate, work auto-assigns
-3. **Autonomous Coordination** - One goal in, multiple agents act, zero babysitting
-
-## Watch the Demo
-
-1. Three AI agents connect (Planner, Coder, Tester)
-2. You propose ONE goal: "Build a todo API with tests"
-3. Without any additional prompts:
-   - Planner decomposes the task
-   - Coder implements endpoints
-   - Tester writes and runs tests
-4. Goal turns green: **SATISFIED**
-
-**No babysitting. No prompt chaining. Autonomous coordination.**
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      SYNAPSE SERVER                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ World State │  │ Convergence │  │ Work Queue          │ │
-│  │ (beliefs)   │←→│ Engine      │←→│ (role-based)        │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└────────────────────────┬────────────────────────────────────┘
-                         │ MCP Protocol
-        ┌────────────────┼────────────────┐
-        ▼                ▼                ▼
-   ┌─────────┐     ┌─────────┐      ┌─────────┐
-   │ ChatGPT │     │ Claude  │      │ Cursor  │
-   │ Client  │     │ Desktop │      │ IDE     │
-   └─────────┘     └─────────┘      └─────────┘
-```
-
-## MCP Tools (21 total)
-
-### Coordination
-| Tool | Description |
-|------|-------------|
-| `register_agent` | Join the workspace |
-| `declare_intent` | Announce planned work |
-| `acquire_lock` / `release_lock` | Prevent conflicts |
-| `publish_update` | Broadcast changes |
-
-### World State
-| Tool | Description |
-|------|-------------|
-| `read_world_state` | See shared reality |
-| `update_world_state` | Modify shared reality |
-| `assert_fact` | Add beliefs with confidence |
-| `report_failure` | Trigger automatic fixes |
-
-### Goals
-| Tool | Description |
-|------|-------------|
-| `propose_goal` | Start autonomous work chain |
-| `evaluate_goal` | Check goal satisfaction |
-| `assign_work` | Get next task for your role |
-| `complete_work` | Mark work done |
-
-## Why MCP?
-
-MCP is the USB of AI. 800M+ users across ChatGPT, Claude, Cursor, and VS Code. Synapse is the hub they all plug into.
-
-## Connect Any MCP Client
-
-**Claude Desktop** - Add to config:
 ```json
 {
   "mcpServers": {
-    "synapse": {
-      "command": "node",
-      "args": ["/path/to/synapse/dist/mcp/server.js"]
+    "stigmergy": {
+      "url": "https://shiny-credit-ak9lb.run.mcp-use.com/mcp",
+      "transport": "http"
     }
   }
 }
 ```
 
-**Cursor/VS Code** - Point MCP extension to `http://localhost:3200/mcp`
+---
 
-## Files
+## Environment Variables
 
-```
-synapse/
-├── mcp/
-│   ├── server.ts       # Main MCP server + widget
-│   ├── world-state.ts  # Shared cognition runtime
-│   └── index.ts        # Module exports
-├── demo/
-│   ├── PITCH.md        # 3-minute pitch script
-│   ├── run-demo.sh     # Interactive demo
-│   └── instant-demo.sh # Quick demo
-├── hub/                # Core coordination server
-├── shared/             # Shared types
-└── README.md
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_CLIENT_ID` | For Gmail/Calendar | Google OAuth 2.0 client ID |
+| `GOOGLE_CLIENT_SECRET` | For Gmail/Calendar | Google OAuth 2.0 client secret |
+| `GOOGLE_REDIRECT_URI` | For Gmail/Calendar | OAuth callback (e.g. `https://your-host/auth/google/callback`) |
+| `SERPER_API_KEY` | Optional | Live web search for Meeting Kit (News/Thesis/Competitors) |
+| `SYNAPSE_DASHBOARD_URL` | For hosted deploys | Base URL of your deployed MCP server |
 
-## The One-Liner
+---
 
-**"Synapse is the shared brain for AI agents. One goal in, coordinated work out, zero babysitting."**
+## Widgets
+
+| Widget | Trigger | What it does |
+|--------|---------|--------------|
+| **Agents Sidebar** | "Add Stigmergy" / `stigmergy-dashboard` | Shows active agents, coordination state |
+| **Command Center** | "Check email" / "Load inbox" | Inbox, calendar, email actions (Archive, Star, Prep Meeting) |
+| **Meeting Kit** | "Prepare meeting kit for [company]" | Meeting context, sections, Generate Kit, Add to Calendar, Gmail Draft |
+
+---
+
+## Demo Video
+
+*Walk us through: chat prompt → widget appearing → interacting with the widget. Keep it short and punchy — this is your pitch!*
+
+---
+
+## Tech Stack
+
+- **mcp-use** SDK — MCP server, widgets, `useCallTool`, `sendFollowUpMessage`
+- **Google OAuth** — Gmail + Calendar (no mock when configured)
+- **Serper** — Live web search for Meeting Kit research
+- **Deployed** — Manufact / mcp-use cloud
+
+---
+
+## One-Liner
+
+**"Two AI models in one chat. Real email. Real calendar. Investor meeting prep from prompt to booked meeting."**
 
 ---
 

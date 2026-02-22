@@ -227,24 +227,24 @@ body{font-family:system-ui,sans-serif;background:#0d1117;color:#c9d1d9;padding:1
   };
   window.copyBackendCursorPrompt = function(){
     var p = [
-      'Add Stigmergy MCP to Cursor (same URL as ChatGPT). ChatGPT has queued a backend task — you will implement it.',
+      'Add Stigmergy MCP to Cursor using the SAME URL as ChatGPT (required — otherwise you won\'t see the queued task).',
       '',
-      'PREREQUISITE: Add Stigmergy MCP: ' + MCP_URL,
+      'PREREQUISITE: In Cursor → Settings → MCP, add Stigmergy with this exact URL: ' + MCP_URL,
       '',
       'STEP 1 — Join as backend (you\'re the coder):',
       '  join_workspace({ "name": "Cursor Agent", "client": "cursor", "role": "backend", "autonomous": true })',
       '',
-      'STEP 2 — Poll for the task ChatGPT created:',
-      '  poll_work({ "role": "backend" })',
-      '  You\'ll get the backend_task spec (e.g. "Implement POST /api/users...").',
+      'STEP 2 — Get the task:',
+      '  If the join response includes pending_work_for_you, use that work id and description.',
+      '  Otherwise call poll_work({ "role": "backend" }) to get the backend_task spec.',
       '',
       'STEP 3 — Implement it:',
       '  Write the code in the project. Create the endpoint, add validation, etc.',
       '',
       'STEP 4 — Mark done:',
-      '  complete_work({ "work_id": "<id from poll_work>", "result": "Implemented POST /api/users" })',
+      '  complete_work({ "work_id": "<id from join or poll_work>", "result": "Implemented POST /api/users" })',
       '',
-      'We share context: ChatGPT ideated, you code. Same workspace.',
+      'We share context: ChatGPT ideated, you code. Same workspace — same MCP URL.',
     ].join('\n');
     try{navigator.clipboard.writeText(p)}catch(e){}
     followUp('Cursor prompt copied. Paste in Cursor — Cursor will join, poll for the backend task, and implement it.');
@@ -288,7 +288,7 @@ body{font-family:system-ui,sans-serif;background:#0d1117;color:#c9d1d9;padding:1
       h+='</div>'
     });
     const pending=(d.workQueue||[]).filter(function(w){return w.status==='pending'});
-    if(pending.length>0){h+='<div class="sidebar-title" style="margin-top:12px">Pending</div>';pending.slice(0,3).forEach(function(w){h+='<div class="work-item pending">'+esc(w.description)+'</div>'})}
+    if(pending.length>0){h+='<div class="sidebar-title" style="margin-top:12px">Pending</div>';pending.slice(0,3).forEach(function(w){h+='<div class="work-item pending">'+esc(w.description)+'</div>'});h+='<div class="sidebar-hint" style="margin-top:4px;font-size:10px;color:#8b949e">Cursor must use the same Stigmergy URL to pick this up.</div>'}
     if((d.recentEvents||[]).length>0){h+='<div class="sidebar-title" style="margin-top:12px">Recent</div>';(d.recentEvents||[]).slice().reverse().slice(0,5).forEach(function(e){h+='<div class="activity">'+esc(e.agent)+': '+esc(e.description)+'</div>'})}
     document.getElementById('root').innerHTML=h||'No activity yet.'
   }

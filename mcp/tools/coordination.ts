@@ -76,6 +76,10 @@ export function registerCoordinationTools(
       reason: l.reason,
     }));
 
+    const sameUrlHint = workspace.target && !pendingWork
+      ? " If you expected work from ChatGPT, use the SAME Stigmergy MCP URL in this client as in ChatGPT."
+      : null;
+
     return {
       content: [{
         type: "text" as const,
@@ -89,6 +93,7 @@ export function registerCoordinationTools(
             description: pendingWork.description,
             context: pendingWork.context,
           } : null,
+          same_url_hint: sameUrlHint,
           locked_files: lockedFiles,
           agents_online: Array.from(workspace.agents.values()).map(a => ({
             name: a.name,
@@ -224,10 +229,17 @@ export function registerCoordinationTools(
     });
 
     if (!work) {
+      const hint = workspace.target
+        ? " If ChatGPT already queued a task, Cursor must use the SAME Stigmergy MCP URL (Settings → MCP) as ChatGPT."
+        : "";
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ work: null, message: "No work available. Keep polling." }, null, 2)
+          text: JSON.stringify({
+            work: null,
+            message: "No work available. Keep polling." + hint,
+            current_target: workspace.target || undefined,
+          }, null, 2)
         }]
       };
     }
@@ -258,6 +270,10 @@ export function registerCoordinationTools(
       bumpVersion();
     }
 
+    const isMeetingKit = work.context?.kit_target === "meeting-kit";
+    const message = isMeetingKit
+      ? "Work assigned. Research this topic, then call update_meeting_section followed by complete_work."
+      : "Work assigned. Implement it in the project, then call complete_work with work_id and result.";
     return {
       content: [{
         type: "text" as const,
@@ -268,7 +284,7 @@ export function registerCoordinationTools(
             context: work.context,
             auto_assigned: shouldAutoAssign,
           },
-          message: "Work assigned. Research this topic, then call update_meeting_section followed by complete_work.",
+          message,
         }, null, 2)
       }]
     };

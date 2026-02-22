@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "declaration": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "shared/**/*.ts",
+    "hub/**/*.ts",
+    "mcp/**/*.ts",
+    "mcp-server/**/*.ts",
+    "http-tools/**/*.ts",
+    "observer/**/*.ts",
+    "simulator/**/*.ts",
+    "demo/**/*.ts",
+    "gateway/**/*.ts",
+    "persistence/**/*.ts",
+    "cli/**/*.ts",
+    "sdk/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

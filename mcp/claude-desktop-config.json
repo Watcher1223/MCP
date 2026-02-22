@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "synapse": {
+      "command": "npx",
+      "args": ["tsx", "/var/www/synapse/mcp/server.ts"],
+      "env": {
+        "PORT": "3200"
+      }
+    }
+  }
+}

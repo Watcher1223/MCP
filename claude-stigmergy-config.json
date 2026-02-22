@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "stigmergy": {
+      "url": "https://shiny-credit-ak9lb.run.mcp-use.com/mcp",
+      "transport": "http"
+    }
+  }
+}

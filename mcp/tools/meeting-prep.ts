@@ -19,9 +19,22 @@ function normalizePeople(input: string): string[] {
 }
 
 function detectMeetingLink(text: string): string | null {
-  const re = /https?:\/\/(?:[^\s)]*(?:zoom\.us\/j|meet\.google\.com|teams\.microsoft\.com\/l\/meetup-join)[^\s)]*)/i;
-  const m = text.match(re);
-  return m ? m[0] : null;
+  // Video calls: Zoom, Meet, Teams
+  const videoRe = /https?:\/\/(?:[^\s)\]"]*(?:zoom\.us\/j|meet\.google\.com|teams\.microsoft\.com\/l\/meetup-join)[^\s)\]"]*)/i;
+  const videoMatch = text.match(videoRe);
+  if (videoMatch) return videoMatch[0];
+
+  // Scheduling/booking: Calendly, YC, Cal.com, etc.
+  const bookingRe = /https?:\/\/(?:[^\s)\]"]*(?:calendly\.com|cal\.com|application\.ycombinator\.com\/schedules?|book\.(?:stripe|cal)|acuityscheduling\.com|doodle\.com)[^\s)\]"]*)/i;
+  const bookingMatch = text.match(bookingRe);
+  if (bookingMatch) return bookingMatch[0];
+
+  // Generic scheduling link patterns (e.g. "book your interview", "schedule a call")
+  const genericRe = /https?:\/\/[^\s)\]"]*(?:book|schedule|booking|appointment)[^\s)\]"]*/i;
+  const genericMatch = text.match(genericRe);
+  if (genericMatch) return genericMatch[0];
+
+  return null;
 }
 
 function detectTimezone(text: string): string {
@@ -315,6 +328,8 @@ export function registerMeetingPrepTools(
           ok: true,
           email_id: args.email_id,
           companyOrFirm: next.companyOrFirm,
+          meetingLink: next.meetingLink,
+          locationOrLink: next.locationOrLink,
           assumptions: next.assumptions,
           message: "Meeting context extracted. Open the Meeting Kit widget to edit fields and generate the kit.",
         }, null, 2),

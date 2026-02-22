@@ -64,6 +64,28 @@ describe("extractContextFromEmail", () => {
     expect(result.locationOrLink).toContain("zoom.us");
   });
 
+  it("extracts Calendly booking link for YC interview", () => {
+    const result = extractContextFromEmail({
+      subject: "YC Interview — Book your slot",
+      from: "Lisa Wang <lisa@ycombinator.com>",
+      dateHeader: "",
+      bodyText: "Congratulations! Book your YC interview here: https://calendly.com/yc-interviews/30min",
+    });
+    expect(result.locationOrLink).toContain("calendly.com");
+    expect(result.meetingLink).toContain("calendly.com");
+  });
+
+  it("extracts YC application schedule link", () => {
+    const result = extractContextFromEmail({
+      subject: "YC Interview Invite",
+      from: "team@ycombinator.com",
+      dateHeader: "",
+      bodyText: "Schedule your interview: https://application.ycombinator.com/schedule/abc123",
+    });
+    expect(result.locationOrLink).toContain("ycombinator.com");
+    expect(result.meetingLink).toContain("ycombinator.com");
+  });
+
   it("detects 45-minute timebox", () => {
     const result = extractContextFromEmail({
       subject: "Meeting",

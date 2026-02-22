@@ -323,10 +323,40 @@ export function registerGoogleTools(
     }
   });
 
+  /** Sync Google Calendar events into Command Center (same token as Gmail). */
+  async function syncCalendarToCommandCenter(accessToken: string, days = 7): Promise<number> {
+    const auth = getAuthenticatedClient(accessToken);
+    const calendarClient = calendar({ version: "v3", auth });
+    const timeMin = new Date().toISOString();
+    const timeMax = new Date(Date.now() + days * 86400_000).toISOString();
+    const res = await calendarClient.events.list({
+      calendarId: "primary", timeMin, timeMax, singleEvents: true, orderBy: "startTime", maxResults: 20,
+    });
+    const events: CCEvent[] = (res.data.items || []).map(evt => {
+      const start = evt.start?.dateTime || evt.start?.date || "";
+      const end = evt.end?.dateTime || evt.end?.date || "";
+      const startDate = start.split("T")[0];
+      const startTime = start.includes("T") ? start.split("T")[1].substring(0, 5) : "all-day";
+      let duration = "";
+      if (evt.start?.dateTime && evt.end?.dateTime) {
+        const diffMs = new Date(end).getTime() - new Date(start).getTime();
+        const diffMin = Math.round(diffMs / 60000);
+        duration = diffMin >= 60 ? `${Math.floor(diffMin / 60)}h${diffMin % 60 > 0 ? diffMin % 60 + "m" : ""}` : `${diffMin}m`;
+      }
+      return { id: evt.id || generateId(), title: evt.summary || "(no title)", date: startDate, time: startTime, duration, location: evt.location, attendees: evt.attendees?.map(a => a.email || a.displayName || "").filter(Boolean), color: "#3b82f6" };
+    });
+    commandCenter.data.events = events;
+    if (!commandCenter.activeModules.includes("calendar")) commandCenter.activeModules.push("calendar");
+    commandCenter.lastUpdated = now();
+    bumpVersion();
+    log.info(`Synced ${events.length} calendar events to Command Center`);
+    return events.length;
+  }
+
   // ── check_email: Primary entry point when user asks to check/read email ──
   server.tool({
     name: "check_email",
-    description: "IMPORTANT: Call this when the user asks to check email, read inbox, see latest email, or check Gmail. Do NOT say you cannot access email—use this tool. If the user is not connected, it returns a SHORT sign-in link (won't be cut off). You MUST paste that link in your response so the user can click it. Do NOT say 'the link is shown above' — paste it. If connected, it fetches emails and loads them into the Command Center. After calling this, ALWAYS call the command-center tool to display the interactive inbox UI.",
+    description: "IMPORTANT: Call this when the user asks to check email, read inbox, see latest email, or check Gmail. Do NOT say you cannot access email—use this tool. If the user is not connected, it returns a SHORT sign-in link (won't be cut off). You MUST paste that link in your response so the user can click it. Do NOT say 'the link is shown above' — paste it. If connected, it fetches emails and loads them into the Command Center. Also syncs Google Calendar so the dashboard shows both inbox and calendar. After calling this, ALWAYS call the command-center tool to display the interactive inbox UI.",
     schema: z.object({
       query: z.string().optional().describe("Gmail search query, e.g. 'is:unread' or 'from:someone@example.com'"),
       max_results: z.number().optional().describe("Max emails to fetch (default 10)"),
@@ -365,8 +395,16 @@ export function registerGoogleTools(
           if (!commandCenter.activeModules.includes("email")) commandCenter.activeModules.push("email");
           commandCenter.lastUpdated = now(); bumpVersion();
           log.info(`Read ${emails.length} real emails from Gmail`);
+          // Sync Google Calendar so Command Center shows both inbox and calendar
+          let calendarMsg = "";
+          try {
+            const eventCount = await syncCalendarToCommandCenter(token.accessToken, 7);
+            calendarMsg = ` Calendar synced (${eventCount} events).`;
+          } catch (calErr: any) {
+            log.error(`Calendar sync after check_email: ${calErr.message}`);
+          }
           const summary = emails.map((e, i) => `${i + 1}. **${e.subject}** — from ${e.from}\n   ${e.preview?.slice(0, 80)}...`).join("\n\n");
-          return { content: [{ type: "text" as const, text: `NEXT: Call the command-center tool immediately to display the inbox UI.\n\nHere are your latest ${emails.length} emails:\n\n${summary}` }] };
+          return { content: [{ type: "text" as const, text: `NEXT: Call the command-center tool immediately to display the inbox UI.\n\nHere are your latest ${emails.length} emails.${calendarMsg}\n\n${summary}` }] };
         } catch (err: any) {
           log.error(`Gmail API failed, falling back to demo: ${err.message}`);
           // Fall through to demo data

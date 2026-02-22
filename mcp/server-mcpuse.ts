@@ -1754,7 +1754,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
     else {
       emails.forEach(e => {
         const unread = !e.read ? ' unread' : '';
-        h += '<div class="em'+unread+'" onclick="markRead(\\''+e.id+'\\')">';
+        h += '<div class="em'+unread+'" onclick="bookFromEmail(\\''+e.id+'\\')">';
         h += '<span class="em-star'+(e.starred?' on':'')+'" onclick="event.stopPropagation();starEmail(\\''+e.id+'\\')">★</span>';
         h += '<div class="em-top"><span class="em-from">'+esc(e.from)+'</span><span class="em-date">'+formatDate(e.date)+'</span></div>';
         h += '<div class="em-subj">'+esc(e.subject)+'</div>';
@@ -1765,6 +1765,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
           h += '</div>';
         }
         h += '<div class="em-actions">';
+        h += '<button class="btn btn-green" onclick="event.stopPropagation();bookFromEmail(\\''+e.id+'\\')">📅 Book Interview</button>';
         h += '<button class="btn btn-blue" onclick="event.stopPropagation();prepMeeting(\\''+e.id+'\\')">Prep Meeting</button>';
         h += '<button class="btn btn-ghost" onclick="event.stopPropagation();archiveEmail(\\''+e.id+'\\')">'+I.archive+' Archive</button>';
         h += '</div>';
@@ -1974,11 +1975,45 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
       refresh();
     } catch(e) { console.error(e); }
   };
+  window.bookFromEmail = async function(id) {
+    try {
+      await callTool('gmail_get_email', { message_id: id });
+      const res = await callTool('extract_meeting_context', { email_id: id });
+      let link = null;
+      try {
+        const txt = (res && res.content && res.content[0]) ? res.content[0].text : '';
+        const j = JSON.parse(txt || '{}');
+        link = j.meetingLink || j.locationOrLink || null;
+      } catch(_) {}
+      if (link && typeof link === 'string' && link.startsWith('http')) {
+        window.open(link, '_blank');
+        followUp('Opened the booking link in a new tab. Meeting Kit is ready — review fields and generate the kit.');
+      } else {
+        followUp('I extracted meeting details. Open the Meeting Kit widget to review/edit fields, then generate the kit.');
+      }
+      await callTool('cc_execute_action', { action: 'mark_read', target_id: id });
+      refresh();
+    } catch(e) {
+      console.error(e);
+      followUp('Could not open booking link. Make sure Google is connected, then try again.');
+    }
+  };
   window.prepMeeting = async function(id) {
     try {
       await callTool('gmail_get_email', { message_id: id });
-      await callTool('extract_meeting_context', { email_id: id });
-      followUp('I extracted meeting details from that email. Open the Meeting Kit widget to review/edit fields, then generate the kit.');
+      const res = await callTool('extract_meeting_context', { email_id: id });
+      let link = null;
+      try {
+        const txt = (res && res.content && res.content[0]) ? res.content[0].text : '';
+        const j = JSON.parse(txt || '{}');
+        link = j.meetingLink || j.locationOrLink || null;
+      } catch(_) {}
+      if (link && typeof link === 'string' && link.startsWith('http')) {
+        window.open(link, '_blank');
+        followUp('Opened the booking link. Meeting Kit extracted — review and generate the kit.');
+      } else {
+        followUp('I extracted meeting details from that email. Open the Meeting Kit widget to review/edit fields, then generate the kit.');
+      }
       refresh();
     } catch(e) {
       console.error(e);
@@ -2013,6 +2048,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
   };
 
   // ─── Data ───
+  var _calendarSyncDone = false;
   async function refresh() {
     try {
       if (inChatGPT) {
@@ -2026,11 +2062,22 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
         } else {
           state = result;
         }
-        if (state) render(state);
+        if (state) {
+          render(state);
+          if (!_calendarSyncDone && state.googleConnection && state.googleConnection.connected && state.data && (!state.data.events || state.data.events.length === 0)) {
+            _calendarSyncDone = true;
+            loadCalendar();
+          }
+        }
       } else {
         // Fallback: HTTP API
         const r = await fetch(API+'/api/cc/state');
-        render(await r.json());
+        const state = await r.json();
+        render(state);
+        if (!_calendarSyncDone && state.googleConnection && state.googleConnection.connected && state.data && (!state.data.events || state.data.events.length === 0)) {
+          _calendarSyncDone = true;
+          loadCalendar();
+        }
       }
     } catch(e) { console.error('refresh:',e); }
   }
@@ -2331,7 +2378,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
       html += '<div style="font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:10px;text-transform:uppercase">✉️ Email Reply — Edit and Send</div>';
       html += field('To', 'mk-email-to', emailTo);
       html += field('Subject', 'mk-email-subject', emailSubject);
-      html += '<div class="mk-field"><label>Body</label><textarea id="mk-email-body" placeholder="Generate the Meeting Kit to create a draft reply...">' + esc(emailBody) + '</textarea></div>';
+      html += '<div class="mk-field"><label>Body</label><textarea id="mk-email-body" placeholder="Generate the Meeting Kit to create a draft reply..." onfocus="window._mkLastEdit=Date.now()" onblur="window._mkLastEdit=Date.now()">' + esc(emailBody) + '</textarea></div>';
       html += '<div class="mk-email-actions">';
       html += '<button class="mk-btn" onclick="createGmailDraft()">✉️ Create Draft</button>';
       html += '<button class="mk-btn" onclick="sendReply()" style="border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.1)">📤 Send Reply</button>';
@@ -2397,6 +2444,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
 
     // Action buttons
     html += '<div class="mk-actions">';
+    var bookLink = (c.locationOrLink || (m.location && m.location !== 'TBD' ? m.location : '') || '').trim();
+    if (bookLink && bookLink.startsWith('http')) {
+      html += '<button class="mk-btn" onclick="openBookingLink()" style="border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.1)">📅 Book Interview</button>';
+    }
     html += '<button class="mk-btn primary" onclick="generateKit()">⚡ Generate Kit</button>';
     html += '<button class="mk-btn primary" onclick="deepResearch()">🔍 Deep Research</button>';
     html += '<button class="mk-btn" onclick="checkAvailability()">📅 Check Availability</button>';
@@ -2425,10 +2476,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
   function safeHref(url) { return /^https?:\\/\\//i.test(url || '') ? esc(url) : '#'; }
 
   function field(label, id, value) {
-    return '<div class="mk-field"><label>'+label+'</label><input id="'+id+'" value="'+esc(value||'')+'" /></div>';
+    return '<div class="mk-field"><label>'+label+'</label><input id="'+id+'" value="'+esc(value||'')+'" onfocus="window._mkLastEdit=Date.now()" onblur="window._mkLastEdit=Date.now()" /></div>';
   }
   function selectField(label, id, value, opts) {
-    let h = '<div class="mk-field"><label>'+label+'</label><select id="'+id+'">';
+    let h = '<div class="mk-field"><label>'+label+'</label><select id="'+id+'" onfocus="window._mkLastEdit=Date.now()" onblur="window._mkLastEdit=Date.now()">';
     opts.forEach(function(o){ h += '<option value="'+o+'"'+(String(value)===String(o)?' selected':'')+'>'+o+' min</option>'; });
     h += '</select></div>';
     return h;
@@ -2459,6 +2510,12 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
   };
 
   function val(id){ const el=document.getElementById(id); return el?el.value:''; }
+
+  window.openBookingLink = function() {
+    var l = val('mk-loc') || (state && state.context && state.context.locationOrLink) || (state && state.meeting && state.meeting.location) || '';
+    if (l && l.indexOf('http') === 0) { window.open(l, '_blank'); followUp('Opened booking link in new tab.'); }
+    else { followUp('No booking link found. Add the scheduling URL to the Location / Zoom link field.'); }
+  };
 
   window.toggleSection = function(el) {
     const body = el.nextElementSibling;
@@ -2718,9 +2775,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
   };
 
   async function refresh() {
-    // Skip refresh while user is editing a field — prevents overwriting (e.g. time reverting to 9am)
+    // Skip refresh while user is editing — prevents overwriting (popup not letting user edit)
     var active = document.activeElement;
     if (active && active.id && String(active.id).indexOf('mk-') === 0) return;
+    if (window._mkLastEdit && (Date.now() - window._mkLastEdit) < 12000) return;
     try {
       if (inChatGPT) {
         const result = await callTool('get_meeting_kit', {});

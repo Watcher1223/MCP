@@ -2,6 +2,7 @@ import { MCPServer } from "mcp-use/server";
 import { z } from "zod";
 import type { WorkspaceState, Agent } from "../types.js";
 import { generateId, now, Logger } from "../../shared/utils.js";
+import { meetingKit } from "../workspace.js";
 
 const log = new Logger("Stigmergy");
 
@@ -243,6 +244,16 @@ export function registerCoordinationTools(
         work.assignedTo = agent.id;
         agent.status = "working";
         agent.currentTask = work.description;
+        // Show real agent picking up work in Meeting Kit feed
+        if (work.context?.kit_target === "meeting-kit" && work.context?.section) {
+          meetingKit.agentFeed.push({
+            agentName: agent.name,
+            icon: agent.client === "claude" ? "🤖" : agent.client === "cursor" ? "🖱" : "💬",
+            message: `Working on ${work.context.section}...`,
+            timestamp: now(),
+          });
+          meetingKit.lastUpdated = now();
+        }
       }
       bumpVersion();
     }
@@ -287,6 +298,16 @@ export function registerCoordinationTools(
     if (agent) {
       agent.status = "idle";
       agent.currentTask = undefined;
+      // Show real agent activity in Meeting Kit feed when completing meeting-kit work
+      if (work.context?.kit_target === "meeting-kit") {
+        meetingKit.agentFeed.push({
+          agentName: agent.name,
+          icon: agent.client === "claude" ? "🤖" : agent.client === "cursor" ? "🖱" : "💬",
+          message: args.result,
+          timestamp: now(),
+        });
+        meetingKit.lastUpdated = now();
+      }
     }
 
     workspace.intents.push({

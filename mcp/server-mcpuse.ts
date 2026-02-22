@@ -2191,6 +2191,20 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
 
     const m = s.meeting || {};
     const c = s.context || {};
+    // Preserve unsaved edits from inputs before re-rendering (refresh runs every 2-3s and was wiping edits)
+    function read(id) { var el = document.getElementById(id); return el ? el.value : null; }
+    var v;
+    if ((v = read('mk-company')) != null) c = { ...c, companyOrFirm: v };
+    if ((v = read('mk-people')) != null) c = { ...c, people: v.split(',').map(function(x){return x.trim();}).filter(Boolean) };
+    if ((v = read('mk-goal')) != null) c = { ...c, meetingGoal: v };
+    if ((v = read('mk-date')) != null) c = { ...c, date: v };
+    if ((v = read('mk-time')) != null) c = { ...c, time: v };
+    if ((v = read('mk-tz')) != null) c = { ...c, timezone: v };
+    if ((v = read('mk-loc')) != null) c = { ...c, locationOrLink: v };
+    if ((v = read('mk-timebox')) != null) c = { ...c, timeboxMinutes: parseInt(v, 10) || 30 };
+    if ((v = read('mk-product')) != null) c = { ...c, yourProductOneLiner: v };
+    if ((v = read('mk-stage')) != null) c = { ...c, stage: v };
+    if ((v = read('mk-raise')) != null) c = { ...c, raiseTarget: v };
     const sections = s.sections || [];
     const feed = s.agentFeed || [];
     const statusClass = s.status || 'idle';
@@ -2551,7 +2565,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
       '  call update_meeting_section({',
       '    "section_id": "<context.section from task>",',
       '    "content": "<2-3 sentence factual summary>",',
-      '    "bullets": ["<5-7 specific, sourced bullet points>"]',
+      '    "bullets": ["<5-7 specific, sourced bullet points>"],',
+      '    "agent_name": "Claude Code"',
       '  })',
       '',
       'STEP 4 — Complete the task:',
@@ -2567,6 +2582,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
   };
 
   async function refresh() {
+    // Skip refresh while user is editing a field — prevents overwriting (e.g. time reverting to 9am)
+    var active = document.activeElement;
+    if (active && active.id && String(active.id).indexOf('mk-') === 0) return;
     try {
       if (inChatGPT) {
         const result = await callTool('get_meeting_kit', {});

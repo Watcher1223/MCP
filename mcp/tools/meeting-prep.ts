@@ -808,11 +808,12 @@ export function registerMeetingPrepTools(
   // ── update_section: Update a specific section with real research ──
   server.tool({
     name: "update_meeting_section",
-    description: "Update a specific section of the Meeting Kit with new content. Use this when you've researched something and want to fill in real data (e.g., actual news, real competitor list, etc.).",
+    description: "Update a specific section of the Meeting Kit with new content. Use this when you've researched something and want to fill in real data (e.g., actual news, real competitor list, etc.). Pass agent_name so your activity shows in the Agent feed.",
     schema: z.object({
       section_id: z.string().describe("Section ID: snapshot, news, thesis, competitors, talking_points, agenda, questions, reply"),
       content: z.string().describe("New content text for the section"),
       bullets: z.array(z.string()).optional().describe("New bullet points"),
+      agent_name: z.string().optional().describe("Your display name (e.g. 'Claude Code') — shows in Agent Activity feed"),
     }),
   }, async (args: any) => {
     const section = meetingKit.sections.find(s => s.id === args.section_id);
@@ -826,6 +827,15 @@ export function registerMeetingPrepTools(
     section.cached = false;
     section.updatedAt = now();
     meetingKit.lastUpdated = now();
+    // Show real agent activity in the feed (not just virtual server-side agents)
+    if (args.agent_name) {
+      meetingKit.agentFeed.push({
+        agentName: args.agent_name,
+        icon: "🤖",
+        message: `Updated "${section.title}" with research`,
+        timestamp: now(),
+      });
+    }
     bumpVersion();
     log.info(`Updated section: ${section.title}`);
     return { content: [{ type: "text" as const, text: `Updated "${section.title}" with new content.` }] };

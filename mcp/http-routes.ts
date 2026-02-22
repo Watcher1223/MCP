@@ -1288,6 +1288,13 @@ function buildDemoTools(
       }
       return { content: [{ type: "text", text: JSON.stringify({ error: "Gmail OAuth not connected. Use the MCP tool gmail_create_draft with an authenticated session to create a real draft.", to, subject }) }] };
     },
+    gmail_send_reply: async (args) => {
+      const to = (args.to as string) || meetingKit.meeting.emailFrom || "";
+      if (!to) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "No recipient address. Connect Gmail via OAuth or provide a 'to' address." }) }] };
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ error: "Gmail OAuth not connected. Use the MCP tool gmail_send_reply with an authenticated session to send the reply.", to }) }] };
+    },
     rerun_meeting_kit: async (args) => {
       const sectionIds: string[] = (args.section_ids as string[]) || [];
       if (sectionIds.length === 0) return { content: [{ type: "text", text: "Provide at least one section_id." }] };

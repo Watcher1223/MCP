@@ -88,7 +88,7 @@ startWorkCleanup(workspace, bumpVersion);
 const server = new MCPServer({
   name: "stigmergy",
   version: "3.0.0",
-  description: "Stigmergy - MCP Apps Hackathon: Multi-agent coordination (ChatGPT + Claude) inside one chat. When user adds Stigmergy, call stigmergy-dashboard first to show the agents sidebar. NO MOCK DATA: use real Gmail/Calendar via check_email, read_gmail, add_calendar_event. Meeting Kit: ChatGPT builds the kit; Claude joins via MCP to research News/Thesis/Competitors. Show the collaboration: join_workspace, poll_work, complete_work, update_meeting_section. When returning Google sign-in links, paste the full URL in your response.",
+  description: "Stigmergy - MCP Apps Hackathon: Multi-agent coordination (ChatGPT + Claude) inside one chat. When user adds Stigmergy, call stigmergy-dashboard first to show the agents sidebar. NO MOCK DATA: use real Gmail/Calendar via check_email, read_gmail, add_calendar_event. Meeting Kit: ChatGPT builds the kit; Claude joins via MCP to research News/Thesis/Competitors. Email: gmail_create_draft (review first) or gmail_send_reply (send directly). When returning Google sign-in links, paste the full URL in your response.",
 });
 
 // Register all MCP tools
@@ -2126,6 +2126,11 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
 
 /* Draft reply */
 .mk-reply{background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;padding:12px;font-size:12px;white-space:pre-wrap;line-height:1.6;color:var(--tx);font-family:inherit}
+/* Email preview panel */
+.mk-email-preview{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:16px;margin:12px 0}
+.mk-email-preview .mk-field{margin-bottom:10px}
+.mk-email-preview textarea{min-height:120px;resize:vertical;font-family:inherit;font-size:12px;line-height:1.5}
+.mk-email-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 
 /* Claude collaboration bar */
 .mk-claude-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--bdr);background:var(--bg2);flex-wrap:wrap}
@@ -2205,6 +2210,16 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
     if ((v = read('mk-product')) != null) c = { ...c, yourProductOneLiner: v };
     if ((v = read('mk-stage')) != null) c = { ...c, stage: v };
     if ((v = read('mk-raise')) != null) c = { ...c, raiseTarget: v };
+    var emailTo = read('mk-email-to');
+    var emailSubject = read('mk-email-subject');
+    var emailBody = read('mk-email-body');
+    const replySec = (s.sections || []).find(function(x){ return x.id === 'reply'; });
+    const defaultBody = (s.draftReply || (replySec && replySec.content) || '').trim();
+    const defaultTo = (m.emailFrom || '').trim();
+    const defaultSubj = (m.emailSubject ? 'Re: ' + m.emailSubject : (m.company ? 'Meeting Confirmation — ' + m.company : '')).trim();
+    if (emailTo == null) emailTo = defaultTo;
+    if (emailSubject == null) emailSubject = defaultSubj;
+    if (emailBody == null) emailBody = defaultBody;
     const sections = s.sections || [];
     const feed = s.agentFeed || [];
     const statusClass = s.status || 'idle';
@@ -2258,6 +2273,20 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
       html += '<div class="mk-assume"><strong>Missing info:</strong><br>' + c.assumptions.map(esc).join('<br>') + '</div>';
     }
     html += '</div>';
+
+    // Email Reply Preview — editable To, Subject, Body; user clicks Send to send
+    if (m.company) {
+      html += '<div class="mk-email-preview">';
+      html += '<div style="font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:10px;text-transform:uppercase">✉️ Email Reply — Edit and Send</div>';
+      html += field('To', 'mk-email-to', emailTo);
+      html += field('Subject', 'mk-email-subject', emailSubject);
+      html += '<div class="mk-field"><label>Body</label><textarea id="mk-email-body" placeholder="Generate the Meeting Kit to create a draft reply...">' + esc(emailBody) + '</textarea></div>';
+      html += '<div class="mk-email-actions">';
+      html += '<button class="mk-btn" onclick="createGmailDraft()">✉️ Create Draft</button>';
+      html += '<button class="mk-btn" onclick="sendReply()" style="border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.1)">📤 Send Reply</button>';
+      html += '<button class="mk-btn" onclick="draftReply()">📋 Copy to Chat</button>';
+      html += '</div></div>';
+    }
 
     // Layout
     html += '<div class="mk-layout">';
@@ -2323,10 +2352,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
     html += '<button class="mk-btn" onclick="showCalModal()">📅 Create Calendar Event</button>';
     if (s.draftId) {
       html += '<a class="mk-btn mk-btn-draft-link" href="' + safeHref(s.draftWebLink || 'https://mail.google.com/mail/#drafts') + '" target="_blank" rel="noopener noreferrer">📬 Open Draft in Gmail</a>';
-    } else {
-      html += '<button class="mk-btn" onclick="createGmailDraft()">✉️ Create Gmail Draft</button>';
     }
-    html += '<button class="mk-btn" onclick="draftReply()">📋 Copy Reply</button>';
     html += '<button class="mk-btn" onclick="copyKit()">📋 Copy Kit</button>';
     html += '</div>';
 
@@ -2497,9 +2523,14 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
   };
 
   window.createGmailDraft = async function() {
-    if (!state) return;
+    var to = val('mk-email-to');
+    var body = val('mk-email-body');
+    if (!to || !body.trim()) {
+      followUp('Fill in To and Body in the Email Reply panel, then click Create Draft.');
+      return;
+    }
     try {
-      const res = await callTool('gmail_create_draft', {});
+      const res = await callTool('gmail_create_draft', { to: to, subject: val('mk-email-subject'), body: body });
       let parsed;
       try { parsed = JSON.parse(res?.content?.[0]?.text || '{}'); } catch { parsed = {}; }
       if (parsed.success && parsed.draft_link) {
@@ -2510,6 +2541,28 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
       refresh();
     } catch(e) {
       followUp('Could not create Gmail draft. Connect Gmail first (use google_login), then try again.');
+    }
+  };
+
+  window.sendReply = async function() {
+    var to = val('mk-email-to');
+    var body = val('mk-email-body');
+    if (!to || !body.trim()) {
+      followUp('Fill in To and Body in the Email Reply panel, then click Send.');
+      return;
+    }
+    try {
+      const res = await callTool('gmail_send_reply', { to: to, subject: val('mk-email-subject'), body: body });
+      let parsed;
+      try { parsed = JSON.parse(res?.content?.[0]?.text || '{}'); } catch { parsed = {}; }
+      if (parsed.success) {
+        followUp('Reply sent to ' + to + '.');
+      } else {
+        followUp(res?.content?.[0]?.text || 'Could not send reply. Connect Gmail first (google_login).');
+      }
+      refresh();
+    } catch(e) {
+      followUp('Could not send reply. ' + (e?.message || 'Connect Gmail first.'));
     }
   };
 
@@ -2525,7 +2578,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
 
   window.draftReply = function() {
     if (!state) return;
-    followUp('Here is the draft reply email for the ' + state.meeting.company + ' meeting. Please review and send it:\\n\\n' + (state.draftReply || 'No draft available.'));
+    var body = val('mk-email-body') || state.draftReply || '';
+    followUp('Here is the draft reply email for the ' + state.meeting.company + ' meeting. Please review and send it:\\n\\n' + (body || 'No draft available.'));
   };
 
   window.copyKit = function() {

@@ -766,6 +766,75 @@ export function registerGoogleTools(
     }
   });
 
+  // ── gmail_send_reply: Send the reply email directly (no draft) ──
+  server.tool({
+    name: "gmail_send_reply",
+    description: "Send the reply email directly. Use when the user asks to send, reply to, or respond to the email. Creates and sends in one step. For review-before-send, use gmail_create_draft instead.",
+    schema: z.object({
+      token_id: z.string().optional().describe("Token ID from auth. Uses most recent if not provided."),
+      to: z.string().optional().describe("Recipient email address. Defaults to the sender of the source email."),
+      subject: z.string().optional().describe("Email subject. Defaults to 'Re: <original subject>'."),
+      body: z.string().optional().describe("Email body. Defaults to the Meeting Kit draft reply."),
+    }),
+  }, async (args: any, ctx: any) => {
+    const token = args.token_id ? tokenStore.get(args.token_id) : getTokenForContext(ctx);
+    if (!token) {
+      return { content: [{ type: "text" as const, text: "Not authenticated. Call google_login first." }] };
+    }
+
+    try {
+      const auth = getAuthenticatedClient(token.accessToken);
+      const gmailClient = gmail({ version: "v1", auth });
+
+      const sanitizeHeader = (v: string) => v.replace(/[\r\n]+/g, " ").trim();
+      const to = sanitizeHeader(args.to || meetingKit.meeting.emailFrom || "");
+      const subject = sanitizeHeader(args.subject || (meetingKit.meeting.emailSubject
+        ? `Re: ${meetingKit.meeting.emailSubject}`
+        : `Meeting Confirmation — ${meetingKit.meeting.company}`));
+      const body = args.body || meetingKit.draftReply || "";
+
+      if (!to) {
+        return { content: [{ type: "text" as const, text: "No recipient address found. Provide a 'to' address or extract meeting context from an email first." }] };
+      }
+      if (!body.trim()) {
+        return { content: [{ type: "text" as const, text: "No reply body. Generate the Meeting Kit first, or provide a 'body'." }] };
+      }
+
+      const rawLines = [
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        `Content-Type: text/plain; charset=utf-8`,
+        ``,
+        body,
+      ].join("\r\n");
+      const raw = Buffer.from(rawLines).toString("base64url");
+
+      await gmailClient.users.messages.send({
+        userId: "me",
+        requestBody: { raw },
+      });
+
+      meetingKit.lastUpdated = now();
+      bumpVersion();
+
+      log.info(`Gmail reply sent to ${to}`);
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            success: true,
+            to,
+            subject,
+            message: "Reply sent successfully.",
+          }),
+        }],
+      };
+    } catch (err: any) {
+      log.error(`gmail_send_reply failed: ${err.message}`);
+      return { content: [{ type: "text" as const, text: `Failed to send reply: ${err.message}` }] };
+    }
+  });
+
   log.info(isGoogleConfigured()
     ? "Google integration enabled (Gmail + Calendar)"
     : "Google integration in demo mode (set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET for real APIs)");

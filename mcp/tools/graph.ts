@@ -6,7 +6,7 @@ import { now } from "../../shared/utils.js";
 
 /** Canonical list of all Stigmergy tools (52 total). */
 const ALL_STIGMERGY_TOOLS = [
-  "check_email", "google_login", "google_auth_callback", "read_gmail", "read_calendar", "add_calendar_event",
+  "check_email", "google_login", "google_auth_callback", "read_gmail", "read_calendar", "add_calendar_event", "gmail_create_draft", "gmail_send_reply",
   "activate_module", "sync_context", "find_options", "find_hotels", "plan_trip", "cc_execute_action", "get_workspace",
   "prepare_meeting", "get_meeting_kit", "update_meeting_section",
   "upsert_card", "execute_action", "move_card", "list_cards", "clear_board",
